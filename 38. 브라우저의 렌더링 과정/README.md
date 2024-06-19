@@ -77,5 +77,107 @@
 - 자바스크립트에 의한 노드 추가와 삭제
 - 브라우저 창의 리사이징에 의한 뷰포트 크기 변경
 - HTML 레이아웃 변경
-(
+
 레이아웃 계산과 페인팅을 다시 실행하는 리렌더링은 비용이 많이 드는, 성능에 악영향을 주는 작업이다. 따라서 가급적 리렌더링이 빈번하게 발생하지 않도록 주의해야 한다.
+
+##  자바스크립트 파싱과 실행
+**HTML 문서를 파싱한 결과물**로서 생성된 `DOM`은 HTML 문서의 구조와 정보뿐만 아니라 HTML요소와 스타일 등을 변경할 수 있는 프로그래밍 인터페이스로서 `DOM API`를 제공한다.
+즉 자바스크립트 코드에서 DOM API를 사용하면 이미 생성된 DOM을 동적으로 조작할 수 있다.
+
+CSS 파싱 과정과 마찬가지로 렌더링 엔진은 HTML을 한 줄씩 순차적으로 파싱하며 DOM을 생성해 나가다가 자바스크립트 파일을 로드하는 script 태그나 자바스크립트 코드를 콘텐츠로 담은 script 태그를 만나면 **DOM생성을 일시 중단**한다.
+
+script 태그 내의 자바스크립트 코드를 파싱하기 위해 **자바스크립트 엔진에 제어권을 넘기고**, 자바스크립트 파싱과 실행이 종료되면 렌더링 엔진으로 다시 제어권을 넘겨 HTML파싱이 중단된 시점부터 다시 HTML파싱을 시작하여 DOM 생성을 재개한다.
+
+자바스크립트 엔진은 자바스크립트를 해석하여 **AST**(추상적 구문 트리)를 생성한다. AST를 기반으로 인터프리터가 실행할 수 있는 중간 코드인 바이트코드를 생성하여 실행한다.
+![alt text](<자바스크립트 파싱과 실행-1.png>)
+> **토크나이징(tokenizing)**
+> 단순한 문자열인 자바스크립트 소스코드를 어휘 분석하여 문법적 의미를 갖는 코드의 최소 단위인 토큰들로 분해한다.
+> 
+> **파싱** 
+> 토큰들의 집합을 구문 분석하여 AST를 생성한다.
+>
+>**바이트코드 생성과 실행**
+>파싱의 결과물로서 생성된 AST는 인터프리터가 실행할 수 있는 중간 코드인 바이트코드로 변환되고 인터프리터에 의해 실행된다.
+
+## 리플로우와 리페인트
+만약 자바스크립트 코드에 DOM이나 CSSOM을 변경하는 DOM API가 사용된 경우 DOM이나 CSSOM이 변경된다. 이때 변경된 DOM이나 CSSOM은 **다시 렌더 트리로 결합되고 변경된 렌더 트리를 기반으로 레이아웃과 페인트 과정을 거쳐 브라우저의 화면에 다시 렌더링**된다. 이를 `리플로우`, `리페인트`라 한다.
+![alt text](<리플로우와 리페인트.png>)
+`리플로우`는 레이아웃 계산을 다시 하는 것을 말하며, 노드 추가/삭제, 요소의 크기/위치 변경, 윈도우 리사이징 등 레이아웃에 영향을 주는 변경이 발생한 경우에 한하여 실행된다.
+`리페인트`는 재결합된 렌더 트리를 기반으로 다시 페인트를 하는 것을 말한다.
+
+## 자바스크립트 파싱에 의한 HTML 파싱 중단
+브라우저는 동기적으로, 즉 위에서 아래 방향으로 순차적으로 HTML, CSS, 자바스크립트를 파싱하고 실행한다.
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="style.css" />
+    <script>
+      const $apple = document.getElementById('apple')
+
+      $apple.style.color = 'red' // TypeError
+    </script>
+    <title>Title</title>
+  </head>
+  <body>
+    <ul>
+      <li id="apple">Apple</li>
+      <li id="banana">Banana</li>
+      <li id="orange">Orange</li>
+    </ul>
+  </body>
+</html>
+```
+DOM API인  `document.getElementById()`  DOM에서 id가 “apple”인 HTML 요소를 취득한다.
+
+하지만 실행하는 시점에서 아직 id가 “apple”인 HTML 요소를 파싱하지 않았기 때문에 DOM에는 id가 “apple”인 HTML 요소가 포함되어 있지 않은 상태다. 따라서 정상적으로 동작하지 않는다.
+
+이러한 문제를 회피하기 위해 body 요소의 가장 아래에 자바스크립트를 위치시키는 것도 좋은 아이디어다.
+
+- DOM이 완성되지 않은 상태에서 자바스크립트가 DOM을 조작하면 에러가 발생할 수 있다.
+- 자바스크립트 로딩/파싱/실행으로 인해 HTML요소들의 렌더링에 지정받는 일이 발생하지 않아 페이지 로딩 시간이 단축된다.
+```html
+<!DOCTYPE html>
+<html lang="kr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="style.css" />
+    <title>Title</title>
+  </head>
+  <body>
+    <ul>
+      <li id="apple">Apple</li>
+      <li id="banana">Banana</li>
+      <li id="orange">Orange</li>
+    </ul>
+    <script>
+      const $apple = document.getElementById('apple')
+
+      $apple.style.color = 'red'
+    </script>
+  </body>
+</html>
+```
+자바스크립트가 실행될 시점에는 이미 렌더링 엔진이 HTML요소를 모두 파싱하여 DOM생성을 완료한 이후다. DOM이 완성되지않은 상태에서 DOM을 조작할 우려가 없고, 자바스크립트가 실행되기 이전에 DOM생성이 완료되어 렌더링되므로 페이지 로딩 시간이 단축되는 이점도 있다.
+
+## script 태그의 async/defer 어트리뷰트
+자바스크립트 파싱에 의한 DOM 생성이 중단되는 문제를 근본적으로 해결하기 위해 HTML5부터 script 태그에 async와 defer 어트리뷰트가 추가되었다.
+
+async와 defer 어트리뷰트는 다음과 같이 src 어트리뷰트를 통해 외부 자바스크립트 파일을 로드하는 경우에만 사용할 수 있다.
+```html
+<script async src="extern.js"></script>
+<script defer src="extern.js"></script>
+```
+async와 defer 어트리뷰트를 사용하면 HTML 파싱과 외부 자바스크립트 파일의 로드가 비동기적으로 동시에 진행된다. 하지만, 자바스크립트의 실행 시점에 차이가 있다.
+
+### async 어트리뷰트
+
+HTML 파싱과 외부 자바스크립트 파일의 로드가 비동기적으로 동시에 진행된다. 단, 자바스크립트의 파싱과 실행은 자바스크립트 파일의 로드가 완료된 직후 진행되며, 이때 HTML 파싱이 중단된다.
+
+여러 개의 script 태그에 async 어트리뷰트를 지정하면 script 태그의 순서와는 상관없이 로드가 완료된 자바스크립트부터 먼저 실행되므로 순서가 보장되지 않는다. 따라서 순서 보장이 필요한 script 태그에는 async 어트리뷰트를 지정하지 않아야 한다.
+![alt text](async.png)
+### defer 어트리뷰트
+
+async 어트리뷰트와 마찬가지로 HTML 파싱과 외부 자바스크립트 파일의 로드가 비동기적으로 동시에 진행된다. 단, 자바스크립트의 파싱과 실행은 HTML 파싱이 완료된 직후, 즉 DOM 생성이 완료된 직후 진행된다. 따라서 DOM 생성이 완료된 이후 실행되어야 할 자바스크립트에 유용하다.
+![alt text](defer.png)
